@@ -60,7 +60,7 @@ fig1b <- ggplot(data = d2, aes(x=gender, y=value, fill=gender)) +
              ncol=4) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
   stat_compare_means(method = "wilcox",label = "p.signif",label.x = 1.4) + 
-  ylab("module score (log2)") +
+  ylab("signature score (log2)") +
   My_Theme+
   theme(legend.position = "none",
         axis.title.x = element_blank())

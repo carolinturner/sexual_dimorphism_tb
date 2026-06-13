@@ -1,4 +1,4 @@
-## Script 4: 10X single cell data - differential gene expression
+## Script 4: 10X single cell TST data - differential gene expression
 
 library(tidyverse)
 library(scuttle)
@@ -30,7 +30,12 @@ summed <- aggregateAcrossCells(sce_filt,
                                  sample = sce_filt$Sample))
 # filter out sample-label combination with low cell count (e.g. 20)
 summed.filt <- summed[,summed$ncells >= 20]
-#check <- as.data.frame(colData(summed.filt))
+# save breakdown of pseudobulk datasets
+check <- as.data.frame(colData(summed.filt))
+check_table <- as.data.frame(table(check$CellType,check$Gender)) %>%
+  pivot_wider(names_from = Var2, values_from = Freq)
+colnames(check_table) <- c("CellType","Female_n","Male_n")
+write.csv(check_table,"../../../data/DE_TST_NumberPseudobulksBySex.csv", row.names = F)
 
 # convert character to factor columns
 summed.filt$Gender <- factor(summed.filt$Gender)

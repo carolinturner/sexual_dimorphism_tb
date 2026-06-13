@@ -1,4 +1,5 @@
 library(tidyverse)
+library(rstatix)
 library(ggpubr)
 
 #My_Theme
@@ -55,17 +56,41 @@ dat1 <- subset(d, module %in% c("IFNA2_TST","IFNG_TST","TNF_TST")) # TST modules
 dat2 <- subset(d, module %in% c("IFNA_KC","IFNG_KC","TNF_KC")) # KC modules
 dat3 <- subset(d, module %in% c("IFN1_MDM","IFN2_MDM","IFNG_MDM","TNF_MDM")) # MDM modules
 
+# stats (multiple testing correction)
+stats1 <- dat1 %>%
+  group_by(module, CellType) %>%
+  wilcox_test(average ~ Gender) %>%
+  adjust_pvalue(method = "fdr") %>%
+  ungroup() %>%
+  mutate(y.position = max(dat1$average, na.rm = TRUE) + 0.5,
+         p.adj.label = ifelse(p.adj > 0.05, "ns", p.adj))
+stats2 <- dat2 %>%
+  group_by(module, CellType) %>%
+  wilcox_test(average ~ Gender) %>%
+  adjust_pvalue(method = "fdr") %>%
+  ungroup() %>%
+  mutate(y.position = max(dat2$average, na.rm = TRUE) + 0.5,
+         p.adj.label = ifelse(p.adj > 0.05, "ns", p.adj))
+stats3 <- dat3 %>%
+  group_by(module, CellType) %>%
+  wilcox_test(average ~ Gender) %>%
+  adjust_pvalue(method = "fdr") %>%
+  ungroup() %>%
+  mutate(y.position = max(dat3$average, na.rm = TRUE) + 0.5,
+         p.adj.label = ifelse(p.adj > 0.05, "ns", p.adj))
+
 ### Figure 3A ####
 fig3a <- ggplot(data = dat1, aes(x=Gender, y=average, fill=Gender)) + 
   geom_jitter(size = 0.6, alpha = 1, width = 0.1, height = 0)+
   geom_boxplot(alpha = 0.5, outlier.shape = NA) +
   facet_grid(module~CellType) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
-  stat_compare_means(method = "wilcox",label = "p.signif",label.x=1.4,label.y=3.5) + 
+  stat_pvalue_manual(stats1, label = "p.adj.label", tip.length = 0.01) +
   ylab("module Z-score (log2)") +
   My_Theme+
   theme(legend.position = "none",
         axis.title.x = element_blank())
+fig3a
 ggsave("../../../figures/Figure3A.svg",plot=fig3a,units="cm",width=20,height=10,dpi=300)
 
 ### Supplementary Figure 3 ####
@@ -74,11 +99,12 @@ figS3a <- ggplot(data = dat2, aes(x=Gender, y=average, fill=Gender)) +
   geom_boxplot(alpha = 0.5,outlier.shape = NA) +
   facet_grid(module~CellType) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
-  stat_compare_means(method = "wilcox",label = "p.signif",label.x = 1.4,label.y=4) + 
+  stat_pvalue_manual(stats2, label = "p.adj.label", tip.length = 0.01) +
   ylab("module Z-score (log2)") +
   My_Theme+
   theme(legend.position = "none",
         axis.title.x = element_blank())
+figS3a
 ggsave("../../../figures/FigureS3A.svg",plot=figS3a,units="cm",width=20,height=10,dpi=300)
 
 figS3b <- ggplot(data = dat3, aes(x=Gender, y=average, fill=Gender)) + 
@@ -86,7 +112,7 @@ figS3b <- ggplot(data = dat3, aes(x=Gender, y=average, fill=Gender)) +
   geom_boxplot(alpha = 0.5,outlier.shape=NA) +
   facet_grid(module~CellType) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
-  stat_compare_means(method = "wilcox",label = "p.signif",label.x = 1.4,label.y=5) + 
+  stat_pvalue_manual(stats3, label = "p.adj.label", tip.length = 0.01) +
   ylab("module Z-score (log2)") +
   My_Theme+
   theme(legend.position = "none",

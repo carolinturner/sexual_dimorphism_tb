@@ -1,4 +1,4 @@
-## Script 3: 10X single cell data module analyses
+## Script 3: 10X single cell TST data module analyses
 
 library(tidyverse)
 library(biomaRt)

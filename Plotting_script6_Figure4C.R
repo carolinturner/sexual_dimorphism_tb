@@ -2,7 +2,7 @@ library(pheatmap)
 library(tidyverse)
 
 # load data
-dat <- read.csv("../../../data/SourceData_10X_DEbyCellType_NoUndefinedOrEC_PseudobulkFilter20.csv") %>%
+dat <- read.csv("../../../data/SourceData_BAL_DEbyCellType_PseudobulkFilter20.csv") %>%
   select(logFC,cluster,gene,Chromosome)
 
 # reformat data
@@ -10,15 +10,10 @@ d <- dat %>%
   pivot_wider(names_from = cluster, values_from = logFC) %>%
   column_to_rownames("gene") %>%
   mutate(Chromosome = ifelse(Chromosome %in% c("X","Y"),Chromosome,"autosomal")) %>%
-  arrange(desc(Chromosome)) %>%
-  dplyr::rename(CD4 = "CD4_T",
-                CD8 = "CD8_T",
-                "CD8_atyp." = "atypical_CD8",
-                gd_V1 = "gd_T_V1",
-                gd_V2 = "gd_T_V2",
-                KC_sb = "keratinocytes_suprabasal")
+  arrange(desc(Chromosome))
 annot <- d %>% select(Chromosome)
-mat <- d %>% select(-Chromosome) %>% select(CD4,CD8,CD8_atyp.,gd_V1,gd_V2,NKT,NK,myeloid,KC_sb) %>% as.matrix()
+mat <- d %>% select(-Chromosome) %>%
+  as.matrix()
 
 # define annotation colors
 mycolors <- list(
@@ -42,4 +37,4 @@ p <- pheatmap(mat,
               show_rownames = T,
               annotation_row = annot,
               annotation_colors = mycolors)
-ggsave("../../../figures/Figure3B.svg",p,width = 12,height = 12,units = "cm",dpi = 300)
+ggsave("../../../figures/Figure4C.svg",p,width = 15,height = 12,units = "cm",dpi = 300)
