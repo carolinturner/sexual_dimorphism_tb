@@ -3,6 +3,7 @@
 The scripts provided here were written by Dr Carolin Turner, Dr Jana Jiang and Dr James Greenan-Barrett, and used for analysis and figure plotting in the manuscript *"Human in vivo immunology of tuberculosis is not affected by sex dimorphism"* (link to be added upon publication).
 
 `Analysis scripts` 1-10 require input data available from public repositories as listed below and from the Supplementary Tables in the manuscript, and produce most of the SourceData file.
+
 `Plotting scripts` 1-5 make all figures and tables in the manuscript and require as input the SourceData file provided alongside the manuscript.
 
 **Data availability:**
