@@ -1,16 +1,20 @@
-## Script 8: BAL single cell data - differential abundance
+## Script 8: Differential abundance analysis - Active TB: BAL (single cell)
 
 library(scater)
-library(scran)
 library(tidyverse)
+library(openxlsx)
 library(edgeR)
-library(ggh4x)
 
-# load data
-sce <- readRDS("GSE326212_TB.rds")
+## Step 1: load data and add cell annotations to Source Data
+sce <- readRDS("../../../data/GSE326212_TB.rds")
 coldat_df <- colData(sce) %>% as.data.frame() %>% select(cell_id,sample,sex,celltypes)
-write.csv(coldat_df,"../../../data/SourceData_BAL_DA.csv",row.names = F)
 
+wb <- loadWorkbook("../../../SourceData.xlsx")
+addWorksheet(wb,"Fig4A")
+writeData(wb, "Fig4A", coldat_df)
+saveWorkbook(wb, "../../../SourceData.xlsx", overwrite = TRUE)
+
+## Step 2: Differential abundance analysis
 # Quantify number of cells assigned to each cluster
 abundances <- table(sce$celltypes,sce$sample)
 abundances <- unclass(abundances)
@@ -49,4 +53,4 @@ df <- tibble::rownames_to_column(df, "CellType")
 df$FC_direction <- ifelse(df$logFC >0, "up in male", "up in female")
 
 # write to file
-write.csv(df,"DA_edgeR_BAL_CellType.csv",row.names = F)
+write.csv(df,"../../../data/TableS4_DA_BAL_CellType.csv",row.names = FALSE)

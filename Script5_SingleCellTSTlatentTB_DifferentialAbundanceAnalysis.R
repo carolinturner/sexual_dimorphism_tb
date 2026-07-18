@@ -1,20 +1,13 @@
-## Script 5: 10X single cell TST data - differential abundance
+## Script 5: Differential abundance analysis - Latent TB: Day 2 TST (single cell)
 
+library(HDF5Array)
 library(scater)
-library(scran)
-library(tidyverse)
 library(edgeR)
-library(ggh4x)
+library(tidyverse)
 
-## load sce object and metadata
-sce <- readRDS("../../../../TST_blisters/NEW_n=31/sce_post-QC_norm_dimred_int_clust3_VDJ_annot.rds")
-meta <- read.csv("../../../../TST_blisters/NEW_n=31/metadata.csv") %>% dplyr::select(Sample,Gender)
+## load sce object 
+sce <- loadHDF5SummarizedExperiment("../../../data/Processed_sce_TSTD2_LatentTB_h5")
 
-## add sex to sce object
-colData(sce) <- colData(sce) %>%
-  as.data.frame() %>%
-  left_join(meta) %>%
-  DataFrame
 
 #### CellType ####
 # Quantify number of cells assigned to each cluster
@@ -26,23 +19,23 @@ head(abundances)
 extra.info <- colData(sce)[match(colnames(abundances), sce$Sample),]
 y.ab <- DGEList(abundances, samples=extra.info)
 # convert character to factor columns
-y.ab[["samples"]][["Gender"]] <- factor(y.ab[["samples"]][["Gender"]])
+y.ab[["samples"]][["Sex"]] <- factor(y.ab[["samples"]][["Sex"]])
 y.ab[["samples"]][["Sample"]] <- factor(y.ab[["samples"]][["Sample"]])
 
 # Filter out low-abundance labels (= very rare subpopulations that contain only a handful of cells).
 # Most clusters will not be of low-abundance (otherwise there would not have been enough evidence to define the cluster in the first place).
-keep <- filterByExpr(y.ab, group=y.ab$samples$Gender) # erythrocytes removed 
+keep <- filterByExpr(y.ab, group=y.ab$samples$Sex) # erythrocytes removed 
 y.ab <- y.ab[keep,]
 summary(keep)
 
-design <- model.matrix(~Gender, y.ab$samples)
+design <- model.matrix(~Sex, y.ab$samples)
 design # display design matrix to inform value for coef below
 
 y.ab <- estimateDisp(y.ab, design, trend="none") # turn off trend as not enough points for its stable estimation.
 fit.ab <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
 
 # test for differences in abundance between sample groups
-res <- glmQLFTest(fit.ab, coef="GenderMale") # coef as defined in design matrix; this is the group for which fold change is calculated
+res <- glmQLFTest(fit.ab, coef="SexMale") # coef as defined in design matrix; this is the group for which fold change is calculated
 summary(decideTests(res))
 
 # display results for all cell types
@@ -57,7 +50,7 @@ df <- tibble::rownames_to_column(df, "CellType")
 df$FC_direction <- ifelse(df$logFC > 0, "up in male", "up in female")
 
 # write to file
-write.csv(df, "../../../data/DA_edgeR_TST_CellType.csv", row.names = FALSE)
+write.csv(df, "../../../data/TableS3_DA_TST_CellType.csv", row.names = FALSE)
 
 #### Cluster ####
 # Quantify number of cells assigned to each cluster
@@ -69,23 +62,23 @@ head(abundances)
 extra.info <- colData(sce)[match(colnames(abundances), sce$Sample),]
 y.ab <- DGEList(abundances, samples=extra.info)
 # convert character to factor columns
-y.ab[["samples"]][["Gender"]] <- factor(y.ab[["samples"]][["Gender"]])
+y.ab[["samples"]][["Sex"]] <- factor(y.ab[["samples"]][["Sex"]])
 y.ab[["samples"]][["Sample"]] <- factor(y.ab[["samples"]][["Sample"]])
 
 # Filter out low-abundance labels (= very rare subpopulations that contain only a handful of cells).
 # Most clusters will not be of low-abundance (otherwise there would not have been enough evidence to define the cluster in the first place).
-keep <- filterByExpr(y.ab, group=y.ab$samples$Gender) 
+keep <- filterByExpr(y.ab, group=y.ab$samples$Sex) 
 y.ab <- y.ab[keep,]
 summary(keep) # 69 of 101 clusters retained
 
-design <- model.matrix(~Gender, y.ab$samples)
+design <- model.matrix(~Sex, y.ab$samples)
 design # display design matrix to inform value for coef below
 
 y.ab <- estimateDisp(y.ab, design, trend="none") # turn off trend as not enough points for its stable estimation.
 fit.ab <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
 
 # test for differences in abundance between sample groups
-res <- glmQLFTest(fit.ab, coef="GenderMale") # coef as defined in design matrix; this is the group for which fold change is calculated
+res <- glmQLFTest(fit.ab, coef="SexMale") # coef as defined in design matrix; this is the group for which fold change is calculated
 summary(decideTests(res))
 
 # display results for all 69 clusters
@@ -100,12 +93,13 @@ df <- tibble::rownames_to_column(df, "label.3")
 df$FC_direction <- ifelse(df$logFC > 0, "up in male", "up in female")
 
 # add annotations
-annot <- read.csv("../../../../TST_blisters/NEW_n=31/cluster_order_ont_fun.csv") %>%
-  select(label.3,CellType)
+annot <- colData(sce) %>%
+  as.data.frame() %>%
+  dplyr::select(label.3,CellType) %>%
+  unique()
 df <- left_join(df, annot)
 colnames(df)[1] <- "Cluster"
+colnames(df)[8] <- "Annotation"
 
 # write to file
-write.csv(df, "../../../data/DA_edgeR_TST_cluster.csv", row.names = FALSE)
-
-
+write.csv(df, "../../../data/TableS3_DA_TST_Cluster.csv", row.names = FALSE)

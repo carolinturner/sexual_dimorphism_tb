@@ -1,22 +1,17 @@
-## Script 4: 10X single cell TST data - differential gene expression
+## Script 7: Differential gene expression analysis - Latent TB: Day 2 TST (single cell)
 
+library(HDF5Array)
+library(scater)
 library(tidyverse)
-library(scuttle)
 library(scran)
+library(openxlsx)
 
-## Step 1: load sce object, add metadata and get chromosome annotations ####
-sce <- readRDS("../../../../TST_blisters/NEW_n=31/sce_post-QC_norm_dimred_int_clust3_VDJ_annot.rds")
-meta <- read.csv("../../../../TST_blisters/NEW_n=31/metadata.csv") %>% dplyr::select(Sample,Gender)
-
-# add sex to sce object
-colData(sce) <- colData(sce) %>%
-  as.data.frame() %>%
-  left_join(meta) %>%
-  DataFrame
+## Step 1: load sce object and get chromosome annotations ####
+sce <- loadHDF5SummarizedExperiment("../../../data/Processed_sce_TSTD2_LatentTB_h5")
 
 # chromosome annotation of genes
 chr.annot <- as.data.frame(rowData(sce))
-chr.annot <- chr.annot %>% select(Symbol, Chromosome)
+chr.annot <- chr.annot %>% dplyr::select(Symbol, Chromosome)
 colnames(chr.annot)[1] <- "gene"
 
 ## Step 2: create pseudobulk matrices per sample/CellType combination
@@ -24,7 +19,7 @@ colnames(chr.annot)[1] <- "gene"
 sce_filt <- sce[,!sce$CellType %in% c("undefined","erythrocytes")]
 
 # raw counts are summed 
-summed <- aggregateAcrossCells(sce_filt,
+summed <- scuttle::aggregateAcrossCells(sce_filt,
                                id = DataFrame(
                                  label = sce_filt$CellType,
                                  sample = sce_filt$Sample))
@@ -32,13 +27,13 @@ summed <- aggregateAcrossCells(sce_filt,
 summed.filt <- summed[,summed$ncells >= 20]
 # save breakdown of pseudobulk datasets
 check <- as.data.frame(colData(summed.filt))
-check_table <- as.data.frame(table(check$CellType,check$Gender)) %>%
+check_table <- as.data.frame(table(check$CellType,check$Sex)) %>%
   pivot_wider(names_from = Var2, values_from = Freq)
 colnames(check_table) <- c("CellType","Female_n","Male_n")
-write.csv(check_table,"../../../data/DE_TST_NumberPseudobulksBySex.csv", row.names = F)
+write.csv(check_table,"../../../data/TableS2_DE_TST_NumberPseudobulksBySex.csv", row.names = F)
 
 # convert character to factor columns
-summed.filt$Gender <- factor(summed.filt$Gender)
+summed.filt$Sex <- factor(summed.filt$Sex)
 summed.filt$Sample <- factor(summed.filt$Sample)
 
 ## Step 3: run the differential expression analysis
@@ -50,9 +45,9 @@ lfc.thr <- 0
 # using default settings for pseudoBulkDGE (robust=TRUE)
 de.results <- pseudoBulkDGE(summed.filt, 
                             label = summed.filt$CellType, # specify cluster column
-                            design = ~Gender, 
-                            coef = "GenderMale", # this means pos.FC associated with male
-                            condition = summed.filt$Gender, # specify experimental condition column; only used for abundance-based gene filtering
+                            design = ~Sex, 
+                            coef = "SexMale", # this means pos.FC associated with male
+                            condition = summed.filt$Sex, # specify experimental condition column; only used for abundance-based gene filtering
                             lfc = lfc.thr, # specify the log fold change filter here
                             sorted = TRUE,
                             robust = TRUE
@@ -63,7 +58,7 @@ de.filt.padj <- lapply(de.results, function(x) subset(x, FDR < padj.thr))
 
 # add a column to indicate in which group genes are expressed higher
 de.filt.padj <- lapply(de.filt.padj, function(x) 
-  cbind(x, Gender_marker = ifelse(x$logFC > 0, "up in male", "up in female")))
+  cbind(x, Sex_marker = ifelse(x$logFC > 0, "up in male", "up in female")))
 
 for (i in 1:length(de.filt.padj)){
   de.filt.padj[[i]]$cluster <- rep(names(de.filt.padj[i]),times = nrow(de.filt.padj[[i]]))
@@ -71,7 +66,12 @@ for (i in 1:length(de.filt.padj)){
 de.filt.padj <- do.call(rbind, de.filt.padj)
 de.filt.padj$gene <- row.names(de.filt.padj)
 de.filt.padj <- as.data.frame(de.filt.padj)
-de.filt.padj <- left_join(de.filt.padj,chr.annot)
+results <- de.filt.padj %>% left_join(chr.annot) %>% dplyr::select(cluster,gene,Chromosome,Sex_marker,logFC,logCPM,F,PValue,FDR)
 
-write.csv(de.filt.padj,paste0("../../../data/SourceData_10X_DEbyCellType_NoUndefinedOrEC_PseudobulkFilter20.csv"),
-          row.names = FALSE)
+## Step 4: Add to Source Data
+wb <- loadWorkbook("../../../SourceData.xlsx")
+
+addWorksheet(wb,"Fig3B")
+writeData(wb, "Fig3B", results)
+
+saveWorkbook(wb, "../../../SourceData.xlsx", overwrite = TRUE)

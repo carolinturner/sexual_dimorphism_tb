@@ -1,0 +1,246 @@
+---
+title: "Script 4: Differential gene expression analysis Latent TB TST (D2+D7)"
+---
+Load libraries
+```{r}
+library(tidyverse)
+#install.packages("devtools")
+#devtools::install_github("PF2-pasteur-fr/SARTools", build_opts="--no-resave-data")
+library(SARTools)
+library(openxlsx)
+```
+
+
+Step 1: Prep input data for SARtools script
+```{r}
+# Load data
+matrix <- read.csv("../../../data/rawcounts_integrated-TST-transcriptome.csv")
+matrix_int <- round(matrix[,2:ncol(matrix)]) # round to integer
+
+genes <- as.data.frame(matrix[,1]) # list of gene identifiers
+names <- colnames(matrix_int) # list of samples
+dir.create("../../../data/TSTLatentTBraw") # new folder where single .txt files are saved to
+
+# split raw data matrix into single .txt files
+for (i in 1:length(names)){
+  sample <- matrix_int[,i]
+  merged <- cbind(genes,sample)
+  write.table(merged,file=paste0("../../../data/TSTLatentTBraw/",names[i],".txt"),row.names=FALSE,col.names=FALSE,sep="\t")
+}
+
+# add filename to metadata and save as .txt files
+meta <- read.table("../../../data/E-MTAB-14687.sdrf.txt", header = T, sep ="\t") %>%
+  dplyr::select(Source.Name,Characteristics.stimulus.,Characteristics.sex.)%>%
+  dplyr::rename(sample = "Source.Name",
+                stimulant = "Characteristics.stimulus.",
+                sex = "Characteristics.sex.") %>%
+  filter(!stimulant == "saline") %>%
+  mutate(Filename = paste0(sample,".txt")) %>%
+  dplyr::select(sample,Filename,sex,stimulant)
+
+# Day 2 TST metadata
+metaD2 <- meta %>% filter(stimulant == "TST_D2")
+write.table(metaD2,"../../../data/Meta_TSTD2_LatentTB.txt",sep="\t",row.names = F)
+
+# Day 7 TST metadata
+metaD7 <- meta %>% filter(stimulant == "TST_D7")
+write.table(metaD7,"../../../data/Meta_TSTD7_LatentTB.txt",sep="\t",row.names = F)
+
+```
+
+Step 2: Prep parameters for SARtools analysis - Day 2 TST
+SARtools template script from: https://github.com/PF2-pasteur-fr/SARTools/blob/master/template_script_DESeq2.r
+```{r}
+rm(list=ls())                                       # remove all the objects from the R session
+workDir <- "../../../data"                          # working directory for the R session
+projectName <- "TST_D2 - Male vs Female"            # name of the project
+author <- "Your name"                               # author of the statistical analysis/report
+targetFile <- "Meta_TSTD2_LatentTB.txt"               # path to the design/target file
+rawDir <- "TSTLatentTBraw"                          # path to the directory containing raw counts files
+featuresToRemove <- NULL                            # names of the features to be removed
+                                                    # (specific HTSeq-count information and rRNA for example)                                            # NULL if no feature to remove
+varInt <- "sex"                                     # factor of interest
+condRef <- "Female"                                 # reference biological condition
+batch <- NULL                                       # blocking factor: NULL (default) or "batch" for example
+fitType <- "parametric"                             # mean-variance relationship: "parametric" (default), "local" or "mean"
+cooksCutoff <- FALSE                                # TRUE/FALSE to perform the outliers detection (default is TRUE)
+independentFiltering <- TRUE                        # TRUE/FALSE to perform independent filtering (default is TRUE)
+alpha <- 0.05                                       # threshold of statistical significance
+pAdjustMethod <- "fdr"                              # p-value adjustment method: "BH" (default) or "BY"
+
+typeTrans <- "VST"                                  # transformation for PCA/clustering: "VST" or "rlog"
+locfunc <- "median"                                 # "median" (default) or "shorth" to estimate the size factors
+
+colors <- c("dodgerblue","firebrick1",              # vector of colors of each biological condition on the plots
+            "MediumVioletRed","SpringGreen")
+
+forceCairoGraph <- FALSE
+```
+
+Step 3: Run SARtools analysis - Day 2 TST
+SARtools template script from: https://github.com/PF2-pasteur-fr/SARTools/blob/master/template_script_DESeq2.r
+```{r}
+setwd(workDir)
+
+if (forceCairoGraph) options(bitmapType="cairo")
+
+# checking parameters
+checkParameters.DESeq2(projectName=projectName,author=author,targetFile=targetFile,
+                       rawDir=rawDir,featuresToRemove=featuresToRemove,varInt=varInt,
+                       condRef=condRef,batch=batch,fitType=fitType,cooksCutoff=cooksCutoff,
+                       independentFiltering=independentFiltering,alpha=alpha,pAdjustMethod=pAdjustMethod,
+                       typeTrans=typeTrans,locfunc=locfunc,colors=colors)
+
+# loading target file
+target <- loadTargetFile(targetFile=targetFile, varInt=varInt, condRef=condRef, batch=batch)
+
+# loading counts
+counts <- loadCountData(target=target, rawDir=rawDir, featuresToRemove=featuresToRemove)
+
+# description plots
+#majSequences <- descriptionPlots(counts=counts, group=target[,varInt], col=colors)
+
+# analysis with DESeq2
+out.DESeq2 <- run.DESeq2(counts=counts, target=target, varInt=varInt, batch=batch,
+                         locfunc=locfunc, fitType=fitType, pAdjustMethod=pAdjustMethod,
+                         cooksCutoff=cooksCutoff, independentFiltering=independentFiltering, alpha=alpha)
+
+# PCA + clustering
+#exploreCounts(object=out.DESeq2$dds, group=target[,varInt], typeTrans=typeTrans, col=colors)
+
+# summary of the analysis (boxplots, dispersions, diag size factors, export table, nDiffTotal, histograms, MA plot)
+summaryResults <- summarizeResults.DESeq2(out.DESeq2, group=target[,varInt], col=colors,
+                                          independentFiltering=independentFiltering,
+                                          cooksCutoff=cooksCutoff, alpha=alpha)
+# save image of the R session
+#save.image(file=paste0(projectName, ".RData"))
+
+# generating HTML report
+#writeReport.DESeq2(target=target, counts=counts, out.DESeq2=out.DESeq2, summaryResults=summaryResults,
+#                   majSequences=majSequences, workDir=workDir, projectName=projectName, author=author,
+#                   targetFile=targetFile, rawDir=rawDir, featuresToRemove=featuresToRemove, varInt=varInt,
+#                   condRef=condRef, batch=batch, fitType=fitType, cooksCutoff=cooksCutoff,
+#                   independentFiltering=independentFiltering, alpha=alpha, pAdjustMethod=pAdjustMethod,
+#                   typeTrans=typeTrans, locfunc=locfunc, colors=colors)
+```
+
+Step 4: Tidy output - Day 2 TST
+```{r}
+# move full results table to new directory to avoid overwriting by future SARtools runs
+dir.create("../../../data/SARtools_output_TSTD2LatentTB")
+file.rename("../../../data/tables/MalevsFemale.complete.txt","../../../data/SARtools_output_TSTD2LatentTB/MalevsFemale.complete.txt")
+
+# save relevant output to source data file
+dat <- read.table("../../../data/SARtools_output_TSTD2LatentTB/MalevsFemale.complete.txt", header = T)
+source_dat <- dat %>%
+  dplyr::select(Id,log2FoldChange,padj) %>%
+  tidyr::drop_na(log2FoldChange, padj) %>%
+  dplyr::rename(ensembl_gene_id = "Id")
+
+wb <- loadWorkbook("../../../SourceData.xlsx")
+
+addWorksheet(wb,"Fig2C")
+writeData(wb, "Fig2C", source_dat)
+
+saveWorkbook(wb, "../../../SourceData.xlsx", overwrite = TRUE)
+
+```
+
+
+Step 5: Prep parameters for SARtools analysis - Day 7 TST
+SARtools template script from: https://github.com/PF2-pasteur-fr/SARTools/blob/master/template_script_DESeq2.r
+```{r}
+rm(list=ls())                                       # remove all the objects from the R session
+workDir <- "../../../data"                          # working directory for the R session
+projectName <- "TST_D7 - Male vs Female"            # name of the project
+author <- "Your name"                               # author of the statistical analysis/report
+targetFile <- "Meta_TSTD7_LatentTB.txt"               # path to the design/target file
+rawDir <- "TSTLatentTBraw"                          # path to the directory containing raw counts files
+featuresToRemove <- NULL                            # names of the features to be removed
+                                                    # (specific HTSeq-count information and rRNA for example)                                            # NULL if no feature to remove
+varInt <- "sex"                                     # factor of interest
+condRef <- "Female"                                 # reference biological condition
+batch <- NULL                                       # blocking factor: NULL (default) or "batch" for example
+fitType <- "parametric"                             # mean-variance relationship: "parametric" (default), "local" or "mean"
+cooksCutoff <- FALSE                                # TRUE/FALSE to perform the outliers detection (default is TRUE)
+independentFiltering <- TRUE                        # TRUE/FALSE to perform independent filtering (default is TRUE)
+alpha <- 0.05                                       # threshold of statistical significance
+pAdjustMethod <- "fdr"                              # p-value adjustment method: "BH" (default) or "BY"
+
+typeTrans <- "VST"                                  # transformation for PCA/clustering: "VST" or "rlog"
+locfunc <- "median"                                 # "median" (default) or "shorth" to estimate the size factors
+
+colors <- c("dodgerblue","firebrick1",              # vector of colors of each biological condition on the plots
+            "MediumVioletRed","SpringGreen")
+
+forceCairoGraph <- FALSE
+```
+
+Step 6: Run SARtools analysis - Day 7 TST
+SARtools template script from: https://github.com/PF2-pasteur-fr/SARTools/blob/master/template_script_DESeq2.r
+```{r}
+setwd(workDir)
+if (forceCairoGraph) options(bitmapType="cairo")
+
+# checking parameters
+checkParameters.DESeq2(projectName=projectName,author=author,targetFile=targetFile,
+                       rawDir=rawDir,featuresToRemove=featuresToRemove,varInt=varInt,
+                       condRef=condRef,batch=batch,fitType=fitType,cooksCutoff=cooksCutoff,
+                       independentFiltering=independentFiltering,alpha=alpha,pAdjustMethod=pAdjustMethod,
+                       typeTrans=typeTrans,locfunc=locfunc,colors=colors)
+
+# loading target file
+target <- loadTargetFile(targetFile=targetFile, varInt=varInt, condRef=condRef, batch=batch)
+
+# loading counts
+counts <- loadCountData(target=target, rawDir=rawDir, featuresToRemove=featuresToRemove)
+
+# description plots
+#majSequences <- descriptionPlots(counts=counts, group=target[,varInt], col=colors)
+
+# analysis with DESeq2
+out.DESeq2 <- run.DESeq2(counts=counts, target=target, varInt=varInt, batch=batch,
+                         locfunc=locfunc, fitType=fitType, pAdjustMethod=pAdjustMethod,
+                         cooksCutoff=cooksCutoff, independentFiltering=independentFiltering, alpha=alpha)
+
+# PCA + clustering
+#exploreCounts(object=out.DESeq2$dds, group=target[,varInt], typeTrans=typeTrans, col=colors)
+
+# summary of the analysis (boxplots, dispersions, diag size factors, export table, nDiffTotal, histograms, MA plot)
+summaryResults <- summarizeResults.DESeq2(out.DESeq2, group=target[,varInt], col=colors,
+                                          independentFiltering=independentFiltering,
+                                          cooksCutoff=cooksCutoff, alpha=alpha)
+# save image of the R session
+#save.image(file=paste0(projectName, ".RData"))
+
+# generating HTML report
+#writeReport.DESeq2(target=target, counts=counts, out.DESeq2=out.DESeq2, summaryResults=summaryResults,
+#                   majSequences=majSequences, workDir=workDir, projectName=projectName, author=author,
+#                   targetFile=targetFile, rawDir=rawDir, featuresToRemove=featuresToRemove, varInt=varInt,
+#                   condRef=condRef, batch=batch, fitType=fitType, cooksCutoff=cooksCutoff,
+#                   independentFiltering=independentFiltering, alpha=alpha, pAdjustMethod=pAdjustMethod,
+#                   typeTrans=typeTrans, locfunc=locfunc, colors=colors)
+```
+
+Step 7: Tidy output - Day 7 TST
+```{r}
+# move full results table to new directory to avoid overwriting by future SARtools runs
+dir.create("../../../data/SARtools_output_TSTD7LatentTB")
+file.rename("../../../data/tables/MalevsFemale.complete.txt","../../../data/SARtools_output_TSTD7LatentTB/MalevsFemale.complete.txt")
+
+# save relevant output to source data file
+dat <- read.table("../../../data/SARtools_output_TSTD7LatentTB/MalevsFemale.complete.txt", header = T)
+source_dat <- dat %>%
+  dplyr::select(Id,log2FoldChange,padj) %>%
+  tidyr::drop_na(log2FoldChange, padj) %>%
+  dplyr::rename(ensembl_gene_id = "Id")
+
+wb <- loadWorkbook("../../../SourceData.xlsx")
+
+addWorksheet(wb,"Fig2D")
+writeData(wb, "Fig2D", source_dat)
+
+saveWorkbook(wb, "../../../SourceData.xlsx", overwrite = TRUE)
+
+```
+

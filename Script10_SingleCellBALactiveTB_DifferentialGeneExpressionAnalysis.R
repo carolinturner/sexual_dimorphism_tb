@@ -1,16 +1,13 @@
-## Script 7: BAL single cell data - differential gene expression
+## Script 10: Differential gene expression analysis - Active TB: BAL (single cell)
 
 library(tidyverse)
 library(AnnotationHub)
 library(ensembldb)
-library(scater)
 library(scran)
 
-# load data
-sce <- readRDS("GSE326212_TB.rds")
-coldat_df <- colData(sce) %>% as.data.frame()
+## Step 1: load data and chromosome annotations
+sce <- readRDS("../../../data/GSE326212_TB.rds")
 
-# Step 1: get chromosome annotations
 ens.hs <- query(AnnotationHub(),c("Homo sapiens","EnsDb", 98))[[1]]
 
 chr_annot <- AnnotationDbi::select(ens.hs,
@@ -33,7 +30,7 @@ check <- as.data.frame(colData(summed.filt))
 check_table <- as.data.frame(table(check$celltypes,check$sex)) %>%
   pivot_wider(names_from = Var2, values_from = Freq)
 colnames(check_table) <- c("CellType","Female_n","Male_n")
-write.csv(check_table,"../../../data/DE_BAL_NumberPseudobulksBySex.csv", row.names = F)
+write.csv(check_table,"../../../data/TableS2_DE_BAL_NumberPseudobulksBySex.csv", row.names = F)
 
 # convert character to factor columns
 summed.filt$sex <- factor(summed.filt$sex)
@@ -70,5 +67,11 @@ de.filt.padj$gene <- row.names(de.filt.padj)
 df <- as.data.frame(de.filt.padj)
 df <- left_join(df,chr_annot)
 
-write.csv(df, "../../../data/SourceData_BAL_DEbyCellType_PseudobulkFilter20.csv", row.names = F)
+## Step 4: Add to Source Data
+wb <- loadWorkbook("../../../SourceData.xlsx")
+
+addWorksheet(wb,"Fig4C")
+writeData(wb, "Fig4C", df)
+
+saveWorkbook(wb, "../../../SourceData.xlsx", overwrite = TRUE)
 

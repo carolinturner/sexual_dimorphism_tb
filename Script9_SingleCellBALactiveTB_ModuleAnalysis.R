@@ -1,20 +1,28 @@
-## Script 3: 10X single cell TST data module analyses
+## Script 9: Module analyses - Active TB: BAL (single cell)
 
+library(openxlsx)
 library(tidyverse)
 library(biomaRt)
 library(HGNChelper)
+library(HDF5Array)
+library(scater)
 
-## Step 0: update the gene symbol map ####
+### Step 1: update gene symbols from modules and data matrix ####
 currentHumanMap <- getCurrentHumanMap()
 
-## Step 1: load modules and update gene symbols ####
-modules <- read.csv("../../../data/modules_TNF_IFN.csv") %>%
-  filter(!Source.sample == "Blood" & !Module.name %in% c("IL17_KC","IFNB1_TST.URA")) %>%
-  dplyr::select(Module.name,Module.genes)
+## modules ###
+modules <- read.xlsx("../../../SupplementaryTables.xlsx",
+                     sheet = "Supplementary Table 1",
+                     startRow = 3) %>%
+  pivot_longer(cols = everything(), names_to = "module", values_to = "gene") %>%
+  filter(!is.na(gene)) %>%
+  group_by(module) %>%
+  summarise(genes = paste(gene, collapse = ","), .groups = "drop") %>%
+  filter(module %in% c("IFN1_MDM","IFN2_MDM","TNF_MDM")) 
 
 # correct old gene symbols
-module_genes_old <- strsplit(modules$Module.genes, ",")
-names(module_genes_old) <- modules$Module.name
+module_genes_old <- strsplit(modules$genes, ",")
+names(module_genes_old) <- modules$module
 all_genes <- unique(unlist(module_genes_old))
 updates <- checkGeneSymbols(all_genes,
                             unmapped.as.na = FALSE,
@@ -28,25 +36,17 @@ module_genes <- lapply(module_genes_old, function(g) {
   unname(g_updated)
 })
 
-## Step 2: load sce object, add metadata and update gene symbols ####
-sce <- readRDS("../../../../TST_blisters/NEW_n=31/sce_post-QC_norm_dimred_int_clust3_VDJ_annot.rds")
-meta <- read.csv("../../../../TST_blisters/NEW_n=31/metadata.csv") %>% dplyr::select(Sample,Gender)
+## data ###
+sce <- readRDS("../../../data/GSE326212_TB.rds")
 
-# add sex to sce object
-colData(sce) <- colData(sce) %>%
-  as.data.frame() %>%
-  left_join(meta) %>%
-  DataFrame
-
-# correct old gene symbols
-data_genes <- rownames(rowData(sce))
-updates <- checkGeneSymbols(data_genes,
+data_genes_old <- rownames(rowData(sce))
+updates <- checkGeneSymbols(data_genes_old,
                             unmapped.as.na = FALSE,
                             map = currentHumanMap)
 all(rownames(rowData(sce)) == updates$x) # must be TRUE
 rownames(rowData(sce)) <- updates$Suggested.Symbol
 
-## Step 3: check module genes missing from dataset ####
+## Step 2: check module genes missing from dataset ####
 for (mod in names(module_genes)) {
   genes_in_module <- module_genes[[mod]]
   missing_genes <- setdiff(genes_in_module, rownames(rowData(sce)))
@@ -59,12 +59,7 @@ for (mod in names(module_genes)) {
   }
 }
 
-## load annotation
-#annot <- read.csv("../../../../TST_blisters/NEW_n=31/cluster_order_ont_fun.csv")
-
-
-## Step 4: calculate module scores ####
-# calculate module scores
+## Step 3: calculate module scores ####
 # summary data frame for module gene coverage in dataset
 summary <- data.frame()
 
@@ -87,29 +82,30 @@ for (i in 1:length(module_genes)){
   colData(sce)[[paste0(names(module_genes)[i],"_module-score")]] <- means
 }
 colnames(summary) <- c("module","module_size","module_coverage_n","module_coverage_pct")
-write.csv(summary,"../../../data/ModuleCoverage_10x.csv",row.names = F)
+write.csv(summary,"../../../data/ModuleCoverage_SingleCell_BAL_ActiveTB.csv",row.names = F)
 
 # extract module scores and cluster label
 scores <- colData(sce) %>%
   as.data.frame() %>%
-  dplyr::select("Sample","CellType",paste0(names(module_genes),"_module.score"))
-
-# add sex 
-scores <- scores %>%
-  left_join(meta) %>%
-  dplyr::select(Sample,Gender,CellType,everything())
+  dplyr::select("sample","sex","celltypes",paste0(names(module_genes),"_module.score"))
 
 # convert from wide to long
-scores_long <- scores %>% rownames_to_column("cell")
-scores_long <- gather(scores_long, module, score, colnames(scores_long[5:ncol(scores_long)]))
+scores_long <- scores %>% 
+  rownames_to_column("cell") %>%
+  pivot_longer(cols = -c(cell,sample,sex,celltypes), names_to = "module", values_to = "score")
 
 # calculate Z scores per cell
 zscores <- scores_long %>% group_by(module) %>% mutate(zscore = scale(score)) %>% ungroup()
 # average by group
-avg <- zscores %>% group_by(module,CellType,Sample,Gender) %>% summarise(average = mean(zscore)) %>% ungroup()
+avg <- zscores %>% group_by(module,celltypes,sample,sex) %>% summarise(Zscore_average = mean(zscore)) %>% ungroup()
 
 # remove suffix from module names
 avg$module <- gsub("_module.score","",avg$module)
 
-write.csv(avg,"../../../data/SourceData_10X_ModuleAnalysis.csv",row.names = F)
+## Step 4: add to Source Data ####
+wb <- loadWorkbook("../../../SourceData.xlsx")
 
+addWorksheet(wb,"Fig4B")
+writeData(wb, "Fig4B", avg)
+
+saveWorkbook(wb, "../../../SourceData.xlsx", overwrite = TRUE)
