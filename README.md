@@ -7,7 +7,7 @@ The scripts provided here were written by Dr Carolin Turner, Dr Jana Jiang and D
 `Plotting scripts` 1-5 make all figures and tables in the manuscript and require as input the SourceData file provided alongside the manuscript.
 
 **Data availability:**
-The following data objects are available from UCL's Research Data Repository (link to be added upon publication):
+The following data objects are available from [UCL's Research Data Repository](https://doi.org/10.5522/04/33026150):
 
  - `Processed_TPM_postSVA_Blood_ActiveTB.csv` (required for script 1)
  - `Processed_Raw_Blood_ActiveTB.csv` (required for script 2)
