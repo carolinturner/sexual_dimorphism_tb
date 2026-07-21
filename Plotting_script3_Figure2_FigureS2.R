@@ -65,14 +65,8 @@ fig2a <- ggplot(data = zdat, aes(x = sex, y = module_Zscore, fill = sex)) +
   facet_grid(stimulant ~ module_name) +
   xlab("") +
   ylab("Module Z-score (log2)") +
-  theme(legend.position = "none",
-        axis.title.x = element_text(face = "bold", size = 8),
-        axis.title.y = element_text(face = "bold", size = 8, margin = margin(r=10)),
-        axis.text = element_text(face = "bold", size = 8),
-        strip.text = element_text(face = "bold", size = 8),
-        panel.background = element_rect(fill = "grey95"),
-        strip.background = element_rect(fill = "grey90", colour = "black", linewidth = 0.5))
-fig2a
+  My_Theme +
+  theme(legend.position = "none")
 
 ### Figure 2B ####
 d2 <- read.xlsx("../../../SourceData.xlsx",sheet="Fig2AB,S2") %>%
@@ -108,14 +102,8 @@ fig2b <- ggplot(data = zdat, aes(x = sex, y = module_Zscore, fill = sex)) +
   facet_grid(stimulant ~ module_name) +
   xlab("") +
   ylab("Module Z-score (log2)") +
-  theme(legend.position = "none",
-        axis.title.x = element_text(face = "bold", size = 8),
-        axis.title.y = element_text(face = "bold", size = 8, margin = margin(r=10)),
-        axis.text = element_text(face = "bold", size = 8),
-        strip.text = element_text(face = "bold", size = 8),
-        panel.background = element_rect(fill = "grey95"),
-        strip.background = element_rect(fill = "grey90", colour = "black", linewidth = 0.5))
-fig2b
+  My_Theme +
+  theme(legend.position = "none")
 
 ### Figure 2C ####
 d3 <- read.xlsx("../../../SourceData.xlsx",sheet="Fig2C") %>%
@@ -262,7 +250,6 @@ ylab <- wrap_elements(grid::textGrob("-log10(padj)", rot = 90,
 # fig2d 
 stack_d <- (top / bottom) + plot_layout(heights = c(1, 5))
 fig2d <- wrap_plots(ylab, stack_d, widths = c(0.04, 1), guides = "collect") & theme(legend.position = "bottom")
-fig2d
 
 #### Combine Figure 2 ####
 combined_fig2 <-
@@ -319,13 +306,8 @@ figS2 <- ggplot(data = zdat, aes(x = sex, y = module_Zscore, fill = sex)) +
   facet_grid(stimulant ~ module_name) +
   xlab("") +
   ylab("Module Z-score (log2)") +
-  theme(legend.position = "none",
-        axis.title.x = element_text(face = "bold", size = 8),
-        axis.title.y = element_text(face = "bold", size = 8, margin = margin(r=10)),
-        axis.text = element_text(face = "bold", size = 8),
-        strip.text = element_text(face = "bold", size = 8),
-        panel.background = element_rect(fill = "grey95"),
-        strip.background = element_rect(fill = "grey90", colour = "black", linewidth = 0.5))
+  My_Theme +
+  theme(legend.position = "none")
 
 # save svg
 ggsave("../../../figures/FigureS2.svg", plot = figS2, unit = "cm", width = 20, height = 16, dpi = 300)
